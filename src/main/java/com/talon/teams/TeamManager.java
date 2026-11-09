@@ -7,7 +7,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
@@ -26,63 +25,43 @@ public class TeamManager {
         return Team.fromString(name);
     }
 
-    public Team getTeam(Player player) {
-        return getTeam(player.getUniqueId());
-    }
-
-    public boolean setTeam(Player player, Team team) {
-        if (player == null || team == null) {
-            return false;
-        }
-
-        plugin.getConfig().set(
-            "players." + player.getUniqueId(),
-            team.name()
-        );
-
-        plugin.saveConfig();
-        updatePlayer(player, team);
-        return true;
-    }
-
-    public void removeTeam(Player player) {
-        if (player == null) {
+    public void setTeam(Player player, Team team) {
+        if (team == null) {
+            removeTeam(player);
             return;
         }
 
-        plugin.getConfig().set(
-            "players." + player.getUniqueId(), null
-        );
-
+        plugin.getConfig().set("players." + player.getUniqueId(), team.name());
         plugin.saveConfig();
-        updatePlayer(player, null);
+        updatePlayer(player);
+    }
+
+    public void removeTeam(Player player) {
+        plugin.getConfig().set("players." + player.getUniqueId(), null);
+        plugin.saveConfig();
+        updatePlayer(player);
     }
 
     public List<UUID> getMembers(Team team) {
         List<UUID> members = new ArrayList<UUID>();
-
         if (team == null) {
             return members;
         }
 
-        Set<String> keys = plugin.getConfig()
-            .getConfigurationSection("players") == null
-            ? null
-            : plugin.getConfig()
-                .getConfigurationSection("players").getKeys(false);
-
-        if (keys == null) {
+        if (!plugin.getConfig().isConfigurationSection("players")) {
             return members;
         }
 
-        for (String key : keys) {
-            try {
-                UUID uuid = UUID.fromString(key);
+        Set<String> keys = plugin.getConfig().getConfigurationSection("players").getKeys(false);
 
-                if (getTeam(uuid) == team) {
-                    members.add(uuid);
+        for (String key : keys) {
+            String teamName = plugin.getConfig().getString("players." + key);
+            if (team.name().equalsIgnoreCase(teamName)) {
+                try {
+                    members.add(UUID.fromString(key));
+                } catch (IllegalArgumentException ignored) {
+                    // Ignore invalid UUID entries.
                 }
-            } catch (IllegalArgumentException ignored) {
             }
         }
 
@@ -94,29 +73,93 @@ public class TeamManager {
     }
 
     public int getOnlineCount(Team team) {
-        int count = 0;
+        int online = 0;
 
         for (UUID uuid : getMembers(team)) {
-            if (Bukkit.getPlayer(uuid) != null) {
-                count++;
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                online++;
             }
         }
 
-        return count;
+        return online;
     }
 
     public String getMemberName(UUID uuid) {
         OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
         String name = player.getName();
 
-        return name == null ? uuid.toString() : name;
+        if (name == null) {
+            return "Unknown Player";
+        }
+
+        return name;
+    }
+
+    public void setBase(Team team, Location location) {
+        if (team == null || location == null || location.getWorld() == null) {
+            return;
+        }
+
+        String path = "bases." + team.name();
+
+        plugin.getConfig().set(path + ".world", location.getWorld().getName());
+        plugin.getConfig().set(path + ".x", location.getX());
+        plugin.getConfig().set(path + ".y", location.getY());
+        plugin.getConfig().set(path + ".z", location.getZ());
+        plugin.getConfig().set(path + ".yaw", location.getYaw());
+        plugin.getConfig().set(path + ".pitch", location.getPitch());
+
+        plugin.saveConfig();
+    }
+
+    public TeamBase getBase(Team team) {
+        if (team == null) {
+            return null;
+        }
+
+        String path = "bases." + team.name();
+
+        if (!plugin.getConfig().contains(path + ".world")) {
+            return null;
+        }
+
+        String worldName = plugin.getConfig().getString(path + ".world");
+        World world = Bukkit.getWorld(worldName);
+
+        if (world == null) {
+            return null;
+        }
+
+        double x = plugin.getConfig().getDouble(path + ".x");
+        double y = plugin.getConfig().getDouble(path + ".y");
+        double z = plugin.getConfig().getDouble(path + ".z");
+        float yaw = (float) plugin.getConfig().getDouble(path + ".yaw");
+        float pitch = (float) plugin.getConfig().getDouble(path + ".pitch");
+
+        Location location = new Location(world, x, y, z, yaw, pitch);
+        boolean breached = plugin.getConfig().getBoolean(path + ".breached", false);
+
+        return new TeamBase(location, breached);
+    }
+
+    public void setBreached(Team team, boolean breached) {
+        if (team == null) {
+            return;
+        }
+
+        plugin.getConfig().set("bases." + team.name() + ".breached", breached);
+        plugin.saveConfig();
+    }
+
+    public boolean isBreached(Team team) {
+        TeamBase base = getBase(team);
+        return base != null && base.isBreached();
     }
 
     public void updatePlayer(Player player) {
-        updatePlayer(player, getTeam(player));
-    }
+        Team team = getTeam(player.getUniqueId());
 
-    public void updatePlayer(Player player, Team team) {
         if (team == null) {
             player.setDisplayName(player.getName());
             player.setPlayerListName(player.getName());
@@ -133,76 +176,5 @@ public class TeamManager {
         for (Player player : Bukkit.getOnlinePlayers()) {
             updatePlayer(player);
         }
-    }
-
-    public void setBase(Team team, Location location) {
-        if (team == null || location == null
-                || location.getWorld() == null) {
-            return;
-        }
-
-        String path = "bases." + team.name();
-
-        plugin.getConfig().set(path + ".world",
-            location.getWorld().getName());
-        plugin.getConfig().set(path + ".x", location.getX());
-        plugin.getConfig().set(path + ".y", location.getY());
-        plugin.getConfig().set(path + ".z", location.getZ());
-        plugin.getConfig().set(path + ".yaw", location.getYaw());
-        plugin.getConfig().set(path + ".pitch", location.getPitch());
-
-        plugin.saveConfig();
-    }
-
-    public TeamBase getBase(Team team) {
-        if (team == null) {
-            return null;
-        }
-
-        String path = "bases." + team.name();
-        String worldName = plugin.getConfig()
-            .getString(path + ".world");
-
-        if (worldName == null) {
-            return null;
-        }
-
-        World world = Bukkit.getWorld(worldName);
-
-        if (world == null) {
-            return null;
-        }
-
-        Location location = new Location(
-            world,
-            plugin.getConfig().getDouble(path + ".x"),
-            plugin.getConfig().getDouble(path + ".y"),
-            plugin.getConfig().getDouble(path + ".z"),
-            (float) plugin.getConfig().getDouble(path + ".yaw"),
-            (float) plugin.getConfig().getDouble(path + ".pitch")
-        );
-
-        boolean breached = plugin.getConfig()
-            .getBoolean(path + ".breached", false);
-
-        return new TeamBase(location, breached);
-    }
-
-    public void setBreached(Team team, boolean breached) {
-        if (team == null) {
-            return;
-        }
-
-        plugin.getConfig().set(
-            "bases." + team.name() + ".breached",
-            breached
-        );
-
-        plugin.saveConfig();
-    }
-
-    public boolean isBreached(Team team) {
-        TeamBase base = getBase(team);
-        return base != null && base.isBreached();
     }
 }
