@@ -7,8 +7,7 @@ public enum Team {
     RED("Red", ChatColor.RED),
     BLUE("Blue", ChatColor.BLUE),
     GREEN("Green", ChatColor.GREEN),
-    YELLOW("Yellow", ChatColor.YELLOW),
-    VIGILANTE("Vigilante", ChatColor.DARK_GRAY);
+    YELLOW("Yellow", ChatColor.YELLOW);
 
     private final String displayName;
     private final ChatColor color;
@@ -31,12 +30,17 @@ public enum Team {
     }
 
     public static Team fromString(String name) {
+        if (name == null) {
+            return null;
+        }
+
         for (Team team : values()) {
             if (team.name().equalsIgnoreCase(name)
                     || team.displayName.equalsIgnoreCase(name)) {
                 return team;
             }
         }
+
         return null;
     }
 }
