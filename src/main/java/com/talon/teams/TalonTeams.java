@@ -1,3 +1,4 @@
+
 package com.talon.teams;
 
 import org.bukkit.Bukkit;
@@ -76,7 +77,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
             }
 
             Player player = (Player) sender;
-            Team team = teamManager.getTeam(player);
+            Team team = teamManager.getTeam(player.getUniqueId());
 
             if (team == null) {
                 player.sendMessage(ChatColor.RED + "You are not on a team.");
@@ -134,7 +135,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
         addTeamItem(inventory, 12, Team.BLUE, Material.WOOL, (short) 11);
         addTeamItem(inventory, 14, Team.GREEN, Material.WOOL, (short) 13);
         addTeamItem(inventory, 16, Team.YELLOW, Material.WOOL, (short) 4);
-        addTeamItem(inventory, 22, Team.VIGILANTE, Material.NETHER_STAR, (short) 0);
 
         player.openInventory(inventory);
     }
@@ -199,7 +199,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
-        Team team = teamManager.getTeam(player);
+        Team team = teamManager.getTeam(player.getUniqueId());
 
         String prefix = team == null
                 ? ChatColor.GRAY + "[No Team]"
