@@ -36,12 +36,14 @@ public class TeamManager {
         plugin.getConfig().set("players." + player.getUniqueId(), team.name());
         plugin.saveConfig();
         updatePlayer(player);
+        plugin.getShieldManager().updateTeamShield(player, team);
     }
 
     public void removeTeam(Player player) {
         plugin.getConfig().set("players." + player.getUniqueId(), null);
         plugin.saveConfig();
         updatePlayer(player);
+        plugin.getShieldManager().updateTeamShield(player, null);
     }
 
     public List<UUID> getMembers(Team team) {
@@ -246,6 +248,7 @@ public class TeamManager {
 
     public void updatePlayer(Player player) {
         Team team = getTeam(player.getUniqueId());
+        plugin.getShieldManager().ensureTeamShield(player, team);
 
         if (team == null) {
             player.setDisplayName(player.getName());
