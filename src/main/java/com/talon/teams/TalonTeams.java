@@ -27,6 +27,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class TalonTeams extends JavaPlugin implements Listener {
 
     private TeamManager teamManager;
+    private ShieldManager shieldManager;
 
     private static final String MENU_TITLE =
             ChatColor.DARK_RED + "Talon Teams";
@@ -35,8 +36,10 @@ public class TalonTeams extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
 
+        shieldManager = new ShieldManager(this);
         teamManager = new TeamManager(this);
 
+        Bukkit.getPluginManager().registerEvents(shieldManager, this);
         Bukkit.getPluginManager().registerEvents(this, this);
         teamManager.updateOnlinePlayers();
 
@@ -50,6 +53,10 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
     public TeamManager getTeamManager() {
         return teamManager;
+    }
+
+    public ShieldManager getShieldManager() {
+        return shieldManager;
     }
 
     private boolean hasUsePermission(Player player) {
@@ -618,6 +625,10 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+        if (event.isCancelled()) {
+            return;
+        }
+
         if (!MENU_TITLE.equals(event.getView().getTitle())) {
             return;
         }
