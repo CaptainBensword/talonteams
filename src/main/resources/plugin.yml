@@ -1,16 +1,21 @@
+
 name: TalonTeams
-version: 1.0.0
+version: 2.0.0
 main: com.talon.teams.TalonTeams
 author: Talon
-description: Team management plugin for Talon.
+description: Team management, bases, and breach status for Talon.
 
 commands:
   team:
-    description: Opens the Talon team menu.
+    description: Opens the Talon team menu and team commands.
     usage: /team
     aliases: [teams]
 
 permissions:
+  talonteams.use:
+    description: Allows players to use normal TalonTeams features.
+    default: true
+
   talonteams.admin:
-    description: Allows administrators to manage player teams.
+    description: Allows administrators to manage teams, bases, and breaches.
     default: op
