@@ -2,6 +2,8 @@
 package com.talon.teams;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -44,18 +46,17 @@ public class TeamManager {
 
     public List<UUID> getMembers(Team team) {
         List<UUID> members = new ArrayList<UUID>();
-        if (team == null) {
+
+        if (team == null || !plugin.getConfig().isConfigurationSection("players")) {
             return members;
         }
 
-        if (!plugin.getConfig().isConfigurationSection("players")) {
-            return members;
-        }
-
-        Set<String> keys = plugin.getConfig().getConfigurationSection("players").getKeys(false);
+        Set<String> keys = plugin.getConfig()
+                .getConfigurationSection("players").getKeys(false);
 
         for (String key : keys) {
             String teamName = plugin.getConfig().getString("players." + key);
+
             if (team.name().equalsIgnoreCase(teamName)) {
                 try {
                     members.add(UUID.fromString(key));
@@ -68,8 +69,83 @@ public class TeamManager {
         return members;
     }
 
+    // -------------------------
+    // TROPHIES
+    // -------------------------
+
+    public int getTrophies(UUID uuid) {
+        return Math.max(0, plugin.getConfig()
+                .getInt("trophies." + uuid, 0));
+    }
+
+    public void setTrophies(UUID uuid, int amount) {
+        if (uuid == null) {
+            return;
+        }
+
+        plugin.getConfig().set("trophies." + uuid, Math.max(0, amount));
+        plugin.saveConfig();
+    }
+
+    public void addTrophies(UUID uuid, int amount) {
+        if (uuid == null || amount <= 0) {
+            return;
+        }
+
+        long total = (long) getTrophies(uuid) + amount;
+        setTrophies(uuid, (int) Math.min(total, Integer.MAX_VALUE));
+    }
+
+    public int getTeamTrophies(Team team) {
+        int total = 0;
+
+        for (UUID uuid : getMembers(team)) {
+            total += getTrophies(uuid);
+        }
+
+        return total;
+    }
+
+    public List<UUID> getTrophyLeaderboard() {
+        List<UUID> players = new ArrayList<UUID>();
+
+        if (!plugin.getConfig().isConfigurationSection("trophies")) {
+            return players;
+        }
+
+        Set<String> keys = plugin.getConfig()
+                .getConfigurationSection("trophies").getKeys(false);
+
+        for (String key : keys) {
+            try {
+                UUID uuid = UUID.fromString(key);
+
+                if (getTrophies(uuid) > 0) {
+                    players.add(uuid);
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Ignore invalid UUID entries.
+            }
+        }
+
+        Collections.sort(players, new Comparator<UUID>() {
+            @Override
+            public int compare(UUID first, UUID second) {
+                return Integer.compare(
+                        getTrophies(second), getTrophies(first));
+            }
+        });
+
+        return players;
+    }
+
+    // -------------------------
+    // TEAM STRENGTH
+    // -------------------------
+
     public int getStrength(Team team) {
-        return getMembers(team).size() * 10;
+        return getMembers(team).size() * 10
+                + getTeamTrophies(team) * 5;
     }
 
     public int getOnlineCount(Team team) {
@@ -77,6 +153,7 @@ public class TeamManager {
 
         for (UUID uuid : getMembers(team)) {
             Player player = Bukkit.getPlayer(uuid);
+
             if (player != null && player.isOnline()) {
                 online++;
             }
@@ -95,6 +172,10 @@ public class TeamManager {
 
         return name;
     }
+
+    // -------------------------
+    // BASES
+    // -------------------------
 
     public void setBase(Team team, Location location) {
         if (team == null || location == null || location.getWorld() == null) {
@@ -138,7 +219,8 @@ public class TeamManager {
         float pitch = (float) plugin.getConfig().getDouble(path + ".pitch");
 
         Location location = new Location(world, x, y, z, yaw, pitch);
-        boolean breached = plugin.getConfig().getBoolean(path + ".breached", false);
+        boolean breached = plugin.getConfig()
+                .getBoolean(path + ".breached", false);
 
         return new TeamBase(location, breached);
     }
@@ -148,7 +230,8 @@ public class TeamManager {
             return;
         }
 
-        plugin.getConfig().set("bases." + team.name() + ".breached", breached);
+        plugin.getConfig().set(
+                "bases." + team.name() + ".breached", breached);
         plugin.saveConfig();
     }
 
@@ -156,6 +239,10 @@ public class TeamManager {
         TeamBase base = getBase(team);
         return base != null && base.isBreached();
     }
+
+    // -------------------------
+    // PLAYER DISPLAY
+    // -------------------------
 
     public void updatePlayer(Player player) {
         Team team = getTeam(player.getUniqueId());
