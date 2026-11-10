@@ -110,6 +110,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
         if (args[0].equalsIgnoreCase("help")) {
             sender.sendMessage(ChatColor.GOLD + "TalonTeams Commands:");
             sender.sendMessage(ChatColor.YELLOW + "/team - Open team menu");
+            sender.sendMessage(ChatColor.YELLOW + "/team leave - Leave your current team");
             sender.sendMessage(ChatColor.YELLOW + "/team info - View your team");
             sender.sendMessage(ChatColor.YELLOW + "/team trophies - View your trophies");
             sender.sendMessage(ChatColor.YELLOW + "/team trophies top - Trophy leaderboard");
@@ -118,6 +119,29 @@ public class TalonTeams extends JavaPlugin implements Listener {
             sender.sendMessage(ChatColor.YELLOW + "/team set <player> <team> - Admin");
             sender.sendMessage(ChatColor.YELLOW + "/team base set <team> - Admin");
             sender.sendMessage(ChatColor.YELLOW + "/team breach <team> <on|off> - Admin");
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("leave")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can leave a team.");
+                return true;
+            }
+
+            Player player = (Player) sender;
+
+            if (!hasUsePermission(player)) {
+                return true;
+            }
+
+            if (teamManager.getTeam(player.getUniqueId()) == null) {
+                player.sendMessage(ChatColor.RED + "You are not on a team.");
+                return true;
+            }
+
+            teamManager.removeTeam(player);
+            player.sendMessage(ChatColor.GREEN
+                    + "You left your team. Your team shield was removed.");
             return true;
         }
 
