@@ -2,7 +2,6 @@
 package com.talon.teams;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,12 +10,12 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -41,7 +40,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(this, this);
         teamManager.updateOnlinePlayers();
 
-        getLogger().info("TalonTeams Update 2 enabled.");
+        getLogger().info("TalonTeams Update 3 enabled.");
     }
 
     @Override
@@ -96,10 +95,17 @@ public class TalonTeams extends JavaPlugin implements Listener {
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("trophies")) {
+            handleTrophies(sender, args);
+            return true;
+        }
+
         if (args[0].equalsIgnoreCase("help")) {
             sender.sendMessage(ChatColor.GOLD + "TalonTeams Commands:");
             sender.sendMessage(ChatColor.YELLOW + "/team - Open team menu");
             sender.sendMessage(ChatColor.YELLOW + "/team info - View your team");
+            sender.sendMessage(ChatColor.YELLOW + "/team trophies - View your trophies");
+            sender.sendMessage(ChatColor.YELLOW + "/team trophies top - Trophy leaderboard");
             sender.sendMessage(ChatColor.YELLOW + "/team base - View your base");
             sender.sendMessage(ChatColor.YELLOW + "/team warp - Warp to your base");
             sender.sendMessage(ChatColor.YELLOW + "/team set <player> <team> - Admin");
@@ -133,6 +139,8 @@ public class TalonTeams extends JavaPlugin implements Listener {
                     + teamManager.getMembers(team).size());
             player.sendMessage(ChatColor.GRAY + "Online: "
                     + teamManager.getOnlineCount(team));
+            player.sendMessage(ChatColor.GRAY + "Trophies: "
+                    + teamManager.getTeamTrophies(team));
             player.sendMessage(ChatColor.GRAY + "Strength: "
                     + teamManager.getStrength(team));
 
@@ -328,8 +336,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
             } else if (args[2].equalsIgnoreCase("off")) {
                 breached = false;
             } else {
-                sender.sendMessage(ChatColor.RED
-                        + "Use on or off.");
+                sender.sendMessage(ChatColor.RED + "Use on or off.");
                 return true;
             }
 
@@ -347,6 +354,190 @@ public class TalonTeams extends JavaPlugin implements Listener {
                 + "Unknown command. Use /team help.");
 
         return true;
+    }
+
+    private void handleTrophies(CommandSender sender, String[] args) {
+
+        if (args.length == 1) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Console must specify a player.");
+                return;
+            }
+
+            Player player = (Player) sender;
+
+            if (!hasUsePermission(player)) {
+                return;
+            }
+
+            player.sendMessage(ChatColor.GOLD + "Your trophies: "
+                    + ChatColor.YELLOW
+                    + teamManager.getTrophies(player.getUniqueId()));
+            return;
+        }
+
+        if (args[1].equalsIgnoreCase("top")) {
+            if (sender instanceof Player
+                    && !hasUsePermission((Player) sender)) {
+                return;
+            }
+
+            List<UUID> leaderboard =
+                    teamManager.getTrophyLeaderboard();
+
+            sender.sendMessage(ChatColor.GOLD
+                    + "----- Trophy Leaderboard -----");
+
+            if (leaderboard.isEmpty()) {
+                sender.sendMessage(ChatColor.GRAY
+                        + "Nobody has earned trophies yet.");
+                return;
+            }
+
+            int limit = Math.min(10, leaderboard.size());
+
+            for (int i = 0; i < limit; i++) {
+                UUID uuid = leaderboard.get(i);
+                String name = teamManager.getMemberName(uuid);
+                int trophies = teamManager.getTrophies(uuid);
+
+                sender.sendMessage(ChatColor.YELLOW + "#" + (i + 1)
+                        + ChatColor.GRAY + " " + name
+                        + ChatColor.GOLD + " - " + trophies);
+            }
+
+            return;
+        }
+
+        if (!hasAdminPermission(sender)) {
+            return;
+        }
+
+        if (args[1].equalsIgnoreCase("give")
+                || args[1].equalsIgnoreCase("set")) {
+
+            if (args.length < 4) {
+                sender.sendMessage(ChatColor.RED
+                        + "Usage: /team trophies "
+                        + args[1].toLowerCase()
+                        + " <player> <amount>");
+                return;
+            }
+
+            OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+
+            if (target.getName() == null) {
+                sender.sendMessage(ChatColor.RED
+                        + "That player could not be found.");
+                return;
+            }
+
+            int amount;
+
+            try {
+                amount = Integer.parseInt(args[3]);
+            } catch (NumberFormatException exception) {
+                sender.sendMessage(ChatColor.RED
+                        + "Enter a valid whole number.");
+                return;
+            }
+
+            if (amount < 0
+                    || (args[1].equalsIgnoreCase("give") && amount == 0)) {
+                sender.sendMessage(ChatColor.RED
+                        + "Enter a positive amount.");
+                return;
+            }
+
+            if (args[1].equalsIgnoreCase("give")) {
+                teamManager.addTrophies(target.getUniqueId(), amount);
+            } else {
+                teamManager.setTrophies(target.getUniqueId(), amount);
+            }
+
+            int newTotal = teamManager.getTrophies(target.getUniqueId());
+
+            sender.sendMessage(ChatColor.GREEN + "Updated "
+                    + target.getName() + "'s trophies to "
+                    + newTotal + ".");
+
+            if (target.isOnline()) {
+                Player onlineTarget = target.getPlayer();
+                onlineTarget.sendMessage(ChatColor.GOLD
+                        + "Your trophy count is now "
+                        + ChatColor.YELLOW + newTotal + ChatColor.GOLD + ".");
+            }
+
+            getLogger().info(sender.getName() + " changed "
+                    + target.getName() + "'s trophies to " + newTotal + ".");
+
+            return;
+        }
+
+        if (args[1].equalsIgnoreCase("reset")) {
+            if (args.length < 3) {
+                sender.sendMessage(ChatColor.RED
+                        + "Usage: /team trophies reset <player>");
+                return;
+            }
+
+            OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+
+            if (target.getName() == null) {
+                sender.sendMessage(ChatColor.RED
+                        + "That player could not be found.");
+                return;
+            }
+
+            teamManager.setTrophies(target.getUniqueId(), 0);
+
+            sender.sendMessage(ChatColor.GREEN
+                    + "Reset " + target.getName() + "'s trophies.");
+
+            if (target.isOnline()) {
+                target.getPlayer().sendMessage(ChatColor.RED
+                        + "Your trophies have been reset by an admin.");
+            }
+
+            getLogger().info(sender.getName()
+                    + " reset " + target.getName() + "'s trophies.");
+
+            return;
+        }
+
+        sender.sendMessage(ChatColor.RED
+                + "Usage: /team trophies [top|give|set|reset]");
+    }
+
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player victim = event.getEntity();
+        Player killer = victim.getKiller();
+
+        if (killer == null || killer.getUniqueId().equals(victim.getUniqueId())) {
+            return;
+        }
+
+        int transferred = teamManager.getTrophies(victim.getUniqueId());
+
+        if (transferred <= 0) {
+            return;
+        }
+
+        teamManager.setTrophies(victim.getUniqueId(), 0);
+        teamManager.addTrophies(killer.getUniqueId(), transferred);
+
+        killer.sendMessage(ChatColor.GOLD + "You claimed "
+                + ChatColor.YELLOW + transferred
+                + ChatColor.GOLD + " trophies from "
+                + victim.getName() + ".");
+
+        victim.sendMessage(ChatColor.RED + "You lost "
+                + transferred + " trophies to "
+                + killer.getName() + ".");
+
+        getLogger().info(killer.getName() + " claimed "
+                + transferred + " trophies from " + victim.getName() + ".");
     }
 
     private void openTeamMenu(Player player) {
