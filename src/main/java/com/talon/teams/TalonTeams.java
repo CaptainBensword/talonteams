@@ -4,7 +4,6 @@ package com.talon.teams;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.Iterator;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -18,12 +17,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryType;
-import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -32,7 +27,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class TalonTeams extends JavaPlugin implements Listener {
 
     private TeamManager teamManager;
-    private ShieldManager shieldManager;
 
     private static final String MENU_TITLE =
             ChatColor.DARK_RED + "Talon Teams";
@@ -41,7 +35,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
 
-        shieldManager = new ShieldManager(this);
         teamManager = new TeamManager(this);
 
         Bukkit.getPluginManager().registerEvents(this, this);
@@ -57,10 +50,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
     public TeamManager getTeamManager() {
         return teamManager;
-    }
-
-    public ShieldManager getShieldManager() {
-        return shieldManager;
     }
 
     private boolean hasUsePermission(Player player) {
@@ -522,13 +511,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        Iterator<ItemStack> drops = event.getDrops().iterator();
-        while (drops.hasNext()) {
-            if (shieldManager.isTeamShield(drops.next())) {
-                drops.remove();
-            }
-        }
-
         Player victim = event.getEntity();
         Player killer = victim.getKiller();
 
@@ -636,11 +618,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (isProtectedShieldClick(event)) {
-            event.setCancelled(true);
-            return;
-        }
-
         if (!MENU_TITLE.equals(event.getView().getTitle())) {
             return;
         }
@@ -686,57 +663,6 @@ public class TalonTeams extends JavaPlugin implements Listener {
                 + team.getColoredName() + ChatColor.GREEN + ".");
 
         player.closeInventory();
-    }
-
-    private boolean isProtectedShieldClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player)
-                || event.getView().getTopInventory().getType()
-                == InventoryType.CRAFTING) {
-            return false;
-        }
-
-        Player player = (Player) event.getWhoClicked();
-        boolean clickedTop = event.getRawSlot() >= 0
-                && event.getRawSlot() < event.getView()
-                .getTopInventory().getSize();
-
-        if (clickedTop && shieldManager.isTeamShield(event.getCursor())) {
-            return true;
-        }
-
-        if (clickedTop && shieldManager.isTeamShield(event.getCurrentItem())) {
-            return true;
-        }
-
-        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY
-                && shieldManager.isTeamShield(event.getCurrentItem())) {
-            return true;
-        }
-
-        int hotbarButton = event.getHotbarButton();
-        return clickedTop && hotbarButton >= 0
-                && shieldManager.isTeamShield(
-                player.getInventory().getItem(hotbarButton));
-    }
-
-    @EventHandler
-    public void onTeamShieldDrop(PlayerDropItemEvent event) {
-        if (shieldManager.isTeamShield(event.getItemDrop().getItemStack())) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage(ChatColor.RED
-                    + "Your team shield cannot be dropped.");
-        }
-    }
-
-    @EventHandler
-    public void onPlayerRespawn(PlayerRespawnEvent event) {
-        final Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskLater(this, new Runnable() {
-            @Override
-            public void run() {
-                teamManager.updatePlayer(player);
-            }
-        }, 1L);
     }
 
     @EventHandler
