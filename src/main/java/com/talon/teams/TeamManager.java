@@ -246,6 +246,7 @@ public class TeamManager {
 
     public void updatePlayer(Player player) {
         Team team = getTeam(player.getUniqueId());
+        plugin.getShieldManager().updateTeamShield(player, team);
 
         if (team == null) {
             player.setDisplayName(player.getName());
