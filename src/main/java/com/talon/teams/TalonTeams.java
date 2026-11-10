@@ -1,9 +1,17 @@
 
 package com.talon.teams;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -17,11 +25,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Arrays;
-
 public class TalonTeams extends JavaPlugin implements Listener {
 
     private TeamManager teamManager;
+
+    private static final String MENU_TITLE =
+            ChatColor.DARK_RED + "Talon Teams";
 
     @Override
     public void onEnable() {
@@ -32,16 +41,36 @@ public class TalonTeams extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(this, this);
         teamManager.updateOnlinePlayers();
 
-        getLogger().info("TalonTeams has been enabled.");
+        getLogger().info("TalonTeams Update 2 enabled.");
     }
 
     @Override
     public void onDisable() {
-        getLogger().info("TalonTeams has been disabled.");
+        getLogger().info("TalonTeams disabled.");
     }
 
     public TeamManager getTeamManager() {
         return teamManager;
+    }
+
+    private boolean hasUsePermission(Player player) {
+        if (player.hasPermission("talonteams.use")) {
+            return true;
+        }
+
+        player.sendMessage(ChatColor.RED
+                + "You do not have permission to use TalonTeams.");
+        return false;
+    }
+
+    private boolean hasAdminPermission(CommandSender sender) {
+        if (sender.hasPermission("talonteams.admin")) {
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.RED
+                + "You do not have permission to do that.");
+        return false;
     }
 
     @Override
@@ -58,15 +87,24 @@ public class TalonTeams extends JavaPlugin implements Listener {
                 return true;
             }
 
-            openTeamMenu((Player) sender);
+            Player player = (Player) sender;
+
+            if (hasUsePermission(player)) {
+                openTeamMenu(player);
+            }
+
             return true;
         }
 
         if (args[0].equalsIgnoreCase("help")) {
             sender.sendMessage(ChatColor.GOLD + "TalonTeams Commands:");
-            sender.sendMessage(ChatColor.YELLOW + "/team - Open the team menu");
+            sender.sendMessage(ChatColor.YELLOW + "/team - Open team menu");
             sender.sendMessage(ChatColor.YELLOW + "/team info - View your team");
-            sender.sendMessage(ChatColor.YELLOW + "/team set <player> <team> - Set a player's team");
+            sender.sendMessage(ChatColor.YELLOW + "/team base - View your base");
+            sender.sendMessage(ChatColor.YELLOW + "/team warp - Warp to your base");
+            sender.sendMessage(ChatColor.YELLOW + "/team set <player> <team> - Admin");
+            sender.sendMessage(ChatColor.YELLOW + "/team base set <team> - Admin");
+            sender.sendMessage(ChatColor.YELLOW + "/team breach <team> <on|off> - Admin");
             return true;
         }
 
@@ -77,25 +115,50 @@ public class TalonTeams extends JavaPlugin implements Listener {
             }
 
             Player player = (Player) sender;
+
+            if (!hasUsePermission(player)) {
+                return true;
+            }
+
             Team team = teamManager.getTeam(player.getUniqueId());
 
             if (team == null) {
                 player.sendMessage(ChatColor.RED + "You are not on a team.");
-            } else {
-                player.sendMessage(ChatColor.GRAY + "Your team: "
-                        + team.getColoredName());
+                return true;
             }
+
+            player.sendMessage(ChatColor.GOLD + "Your Team: "
+                    + team.getColoredName());
+            player.sendMessage(ChatColor.GRAY + "Members: "
+                    + teamManager.getMembers(team).size());
+            player.sendMessage(ChatColor.GRAY + "Online: "
+                    + teamManager.getOnlineCount(team));
+            player.sendMessage(ChatColor.GRAY + "Strength: "
+                    + teamManager.getStrength(team));
+
+            TeamBase base = teamManager.getBase(team);
+
+            if (base == null) {
+                player.sendMessage(ChatColor.GRAY + "Base: Not set");
+            } else {
+                player.sendMessage(ChatColor.GRAY + "Base: Set");
+                player.sendMessage(ChatColor.GRAY + "Status: "
+                        + (base.isBreached()
+                        ? ChatColor.RED + "BREACHED"
+                        : ChatColor.GREEN + "Secure"));
+            }
+
             return true;
         }
 
         if (args[0].equalsIgnoreCase("set")) {
-            if (!sender.hasPermission("talonteams.admin")) {
-                sender.sendMessage(ChatColor.RED + "You do not have permission.");
+            if (!hasAdminPermission(sender)) {
                 return true;
             }
 
             if (args.length < 3) {
-                sender.sendMessage(ChatColor.RED + "Usage: /team set <player> <team>");
+                sender.sendMessage(ChatColor.RED
+                        + "Usage: /team set <player> <team>");
                 return true;
             }
 
@@ -103,7 +166,8 @@ public class TalonTeams extends JavaPlugin implements Listener {
             Team team = Team.fromString(args[2]);
 
             if (target == null) {
-                sender.sendMessage(ChatColor.RED + "That player is not online.");
+                sender.sendMessage(ChatColor.RED
+                        + "That player is not online.");
                 return true;
             }
 
@@ -120,44 +184,250 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
             target.sendMessage(ChatColor.GREEN + "Your team is now "
                     + team.getColoredName() + ChatColor.GREEN + ".");
+
             return true;
         }
 
-        sender.sendMessage(ChatColor.RED + "Unknown command. Use /team help.");
+        if (args[0].equalsIgnoreCase("base")) {
+            if (args.length >= 2 && args[1].equalsIgnoreCase("set")) {
+                if (!hasAdminPermission(sender)) {
+                    return true;
+                }
+
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage("Only players can set a base.");
+                    return true;
+                }
+
+                if (args.length < 3) {
+                    sender.sendMessage(ChatColor.RED
+                            + "Usage: /team base set <team>");
+                    return true;
+                }
+
+                Player player = (Player) sender;
+                Team team = Team.fromString(args[2]);
+
+                if (team == null) {
+                    player.sendMessage(ChatColor.RED + "Unknown team.");
+                    return true;
+                }
+
+                teamManager.setBase(team, player.getLocation());
+
+                player.sendMessage(ChatColor.GREEN
+                        + team.getColoredName()
+                        + ChatColor.GREEN + " base has been set.");
+
+                return true;
+            }
+
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can view a team base.");
+                return true;
+            }
+
+            Player player = (Player) sender;
+
+            if (!hasUsePermission(player)) {
+                return true;
+            }
+
+            Team team = teamManager.getTeam(player.getUniqueId());
+
+            if (team == null) {
+                player.sendMessage(ChatColor.RED
+                        + "You must join a team first.");
+                return true;
+            }
+
+            TeamBase base = teamManager.getBase(team);
+
+            if (base == null) {
+                player.sendMessage(ChatColor.RED
+                        + "Your team does not have a base yet.");
+                return true;
+            }
+
+            Location location = base.getLocation();
+
+            player.sendMessage(ChatColor.GOLD
+                    + team.getDisplayName() + " Team Base");
+            player.sendMessage(ChatColor.GRAY + "World: "
+                    + location.getWorld().getName());
+            player.sendMessage(ChatColor.GRAY + "Coordinates: "
+                    + location.getBlockX() + ", "
+                    + location.getBlockY() + ", "
+                    + location.getBlockZ());
+
+            player.sendMessage(ChatColor.GRAY + "Status: "
+                    + (base.isBreached()
+                    ? ChatColor.RED + "BREACHED"
+                    : ChatColor.GREEN + "Secure"));
+
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("warp")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can use this command.");
+                return true;
+            }
+
+            Player player = (Player) sender;
+
+            if (!hasUsePermission(player)) {
+                return true;
+            }
+
+            Team team = teamManager.getTeam(player.getUniqueId());
+
+            if (team == null) {
+                player.sendMessage(ChatColor.RED
+                        + "You must join a team first.");
+                return true;
+            }
+
+            TeamBase base = teamManager.getBase(team);
+
+            if (base == null) {
+                player.sendMessage(ChatColor.RED
+                        + "Your team does not have a base yet.");
+                return true;
+            }
+
+            player.teleport(base.getLocation());
+            player.sendMessage(ChatColor.GREEN
+                    + "Teleported to your team base.");
+
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("breach")) {
+            if (!hasAdminPermission(sender)) {
+                return true;
+            }
+
+            if (args.length < 3) {
+                sender.sendMessage(ChatColor.RED
+                        + "Usage: /team breach <team> <on|off>");
+                return true;
+            }
+
+            Team team = Team.fromString(args[1]);
+
+            if (team == null) {
+                sender.sendMessage(ChatColor.RED + "Unknown team.");
+                return true;
+            }
+
+            boolean breached;
+
+            if (args[2].equalsIgnoreCase("on")) {
+                breached = true;
+            } else if (args[2].equalsIgnoreCase("off")) {
+                breached = false;
+            } else {
+                sender.sendMessage(ChatColor.RED
+                        + "Use on or off.");
+                return true;
+            }
+
+            teamManager.setBreached(team, breached);
+
+            sender.sendMessage(ChatColor.GREEN
+                    + team.getDisplayName() + " base status set to "
+                    + (breached ? ChatColor.RED + "BREACHED"
+                    : ChatColor.GREEN + "Secure"));
+
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.RED
+                + "Unknown command. Use /team help.");
+
         return true;
     }
 
     private void openTeamMenu(Player player) {
         Inventory inventory = Bukkit.createInventory(
-                null, 27, ChatColor.DARK_RED + "Choose Your Team");
+                null, 27, MENU_TITLE);
 
-        addTeamItem(inventory, 10, Team.RED, Material.WOOL, (short) 14);
-        addTeamItem(inventory, 12, Team.BLUE, Material.WOOL, (short) 11);
-        addTeamItem(inventory, 14, Team.GREEN, Material.WOOL, (short) 13);
-        addTeamItem(inventory, 16, Team.YELLOW, Material.WOOL, (short) 4);
+        addTeamItem(inventory, 10, Team.RED, (short) 14);
+        addTeamItem(inventory, 12, Team.BLUE, (short) 11);
+        addTeamItem(inventory, 14, Team.GREEN, (short) 13);
+        addTeamItem(inventory, 16, Team.YELLOW, (short) 4);
 
         player.openInventory(inventory);
     }
 
-    private void addTeamItem(Inventory inventory, int slot, Team team,
-                             Material material, short data) {
-        ItemStack item = new ItemStack(material, 1, data);
+    private void addTeamItem(Inventory inventory, int slot,
+                             Team team, short woolColor) {
+
+        ItemStack item = new ItemStack(
+                Material.WOOL, 1, woolColor);
+
         ItemMeta meta = item.getItemMeta();
 
         meta.setDisplayName(team.getColoredName());
-        meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Join the " + team.getDisplayName() + " team",
-                ChatColor.YELLOW + "Click to select"
-        ));
 
+        List<String> lore = new ArrayList<String>();
+
+        lore.add(ChatColor.GRAY + "Team Members:");
+
+        for (UUID uuid : teamManager.getMembers(team)) {
+            Player online = Bukkit.getPlayer(uuid);
+            String name = teamManager.getMemberName(uuid);
+
+            if (online != null && online.isOnline()) {
+                lore.add(ChatColor.GREEN + "[Online] " + name);
+            } else {
+                lore.add(ChatColor.GRAY + "[Offline] " + name);
+            }
+        }
+
+        if (teamManager.getMembers(team).isEmpty()) {
+            lore.add(ChatColor.GRAY + "No members yet.");
+        }
+
+        lore.add("");
+        lore.add(ChatColor.GRAY + "Strength: "
+                + teamManager.getStrength(team));
+        lore.add(ChatColor.GRAY + "Online: "
+                + teamManager.getOnlineCount(team));
+
+        TeamBase base = teamManager.getBase(team);
+
+        if (base == null) {
+            lore.add(ChatColor.GRAY + "Base: Not set");
+            lore.add(ChatColor.GRAY + "Status: Unknown");
+        } else {
+            Location location = base.getLocation();
+
+            lore.add(ChatColor.GRAY + "Base: "
+                    + location.getWorld().getName()
+                    + " (" + location.getBlockX()
+                    + ", " + location.getBlockY()
+                    + ", " + location.getBlockZ() + ")");
+
+            lore.add(ChatColor.GRAY + "Status: "
+                    + (base.isBreached()
+                    ? ChatColor.RED + "BREACHED"
+                    : ChatColor.GREEN + "Secure"));
+        }
+
+        lore.add("");
+        lore.add(ChatColor.YELLOW + "Click to join this team.");
+
+        meta.setLore(lore);
         item.setItemMeta(meta);
+
         inventory.setItem(slot, item);
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!ChatColor.stripColor(event.getView().getTitle())
-                .equalsIgnoreCase("Choose Your Team")) {
+        if (!MENU_TITLE.equals(event.getView().getTitle())) {
             return;
         }
 
@@ -167,7 +437,19 @@ public class TalonTeams extends JavaPlugin implements Listener {
             return;
         }
 
+        if (event.getRawSlot() < 0
+                || event.getRawSlot() >= event.getView()
+                .getTopInventory().getSize()) {
+            return;
+        }
+
         Player player = (Player) event.getWhoClicked();
+
+        if (!hasUsePermission(player)) {
+            player.closeInventory();
+            return;
+        }
+
         ItemStack clicked = event.getCurrentItem();
 
         if (clicked == null || !clicked.hasItemMeta()
@@ -188,6 +470,7 @@ public class TalonTeams extends JavaPlugin implements Listener {
 
         player.sendMessage(ChatColor.GREEN + "You joined "
                 + team.getColoredName() + ChatColor.GREEN + ".");
+
         player.closeInventory();
     }
 
