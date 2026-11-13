@@ -1,9 +1,8 @@
-
 name: TalonTeams
-version: 2.0.0
+version: 2.1.0
 main: com.talon.teams.TalonTeams
 author: Talon
-description: Team management, bases, and breach status for Talon.
+description: Team selection, chat, bases, trophies, and team-issued shields.
 
 commands:
   team:
@@ -17,5 +16,5 @@ permissions:
     default: true
 
   talonteams.admin:
-    description: Allows administrators to manage teams, bases, and breaches.
+    description: Allows administrators to manage teams, bases, and trophies.
     default: op

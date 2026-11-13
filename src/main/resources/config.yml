@@ -1,4 +1,8 @@
 # TalonTeams Configuration
 
+# Current team members can change teams through the menu.
+# Administrators using /team set can still reassign players.
+allow-team-switching: true
+
 # Player team assignments are saved automatically.
 players: {}

@@ -1,7 +1,6 @@
 package com.talon.teams;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -20,11 +19,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
-import org.bukkit.event.inventory.InventoryAction;
-import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -35,7 +34,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
 public class ShieldManager implements Listener {
-
     private static final String SHIELD_MARKER = "talonteams:shield:";
     private final TalonTeams plugin;
 
@@ -44,10 +42,8 @@ public class ShieldManager implements Listener {
     }
 
     /**
-     * Keeps exactly one shield belonging to this player and makes its design
-     * match the player's current team. This method is called from the central
-     * TeamManager update path, so menu changes, admin changes, joins, and
-     * leaving all use the same reconciliation logic.
+     * Keeps one player-owned team shield and updates its design to match
+     * the player's current team.
      */
     public void updateTeamShield(Player player, Team team) {
         if (player == null) {
@@ -64,7 +60,6 @@ public class ShieldManager implements Listener {
         }
 
         PlayerInventory inventory = player.getInventory();
-
         ItemStack[] storage = inventory.getStorageContents();
         for (int slot = 0; slot < storage.length; slot++) {
             ItemStack item = storage[slot];
@@ -98,7 +93,6 @@ public class ShieldManager implements Listener {
         if (team != null && !keptOne[0]) {
             ItemStack shield = createTeamShield(owner, team);
             Map<Integer, ItemStack> leftovers = inventory.addItem(shield);
-
             if (!leftovers.isEmpty()) {
                 if (isEmpty(inventory.getItemInOffHand())) {
                     inventory.setItemInOffHand(shield);
@@ -116,11 +110,9 @@ public class ShieldManager implements Listener {
         if (!isTeamShield(item)) {
             return item;
         }
-
         if (team == null || !belongsTo(item, owner) || keptOne[0]) {
             return null;
         }
-
         keptOne[0] = true;
         return createTeamShield(owner, team);
     }
@@ -135,7 +127,6 @@ public class ShieldManager implements Listener {
                 || !item.hasItemMeta()) {
             return false;
         }
-
         ItemMeta meta = item.getItemMeta();
         return meta != null && meta.hasLocalizedName()
                 && meta.getLocalizedName().startsWith(SHIELD_MARKER);
@@ -145,7 +136,6 @@ public class ShieldManager implements Listener {
         if (!isTeamShield(item)) {
             return false;
         }
-
         String expected = SHIELD_MARKER + owner.toString();
         return expected.equals(item.getItemMeta().getLocalizedName());
     }
@@ -157,12 +147,12 @@ public class ShieldManager implements Listener {
         if (rawMeta instanceof BlockStateMeta) {
             BlockStateMeta meta = (BlockStateMeta) rawMeta;
             BlockState state = meta.getBlockState();
-
             if (state instanceof Banner) {
                 Banner banner = (Banner) state;
                 banner.setBaseColor(getBaseColor(team));
                 banner.setPatterns(getPatterns(team));
                 meta.setBlockState(banner);
+                rawMeta = meta;
             } else {
                 plugin.getLogger().warning(
                         "Could not apply the " + team.name()
@@ -205,11 +195,9 @@ public class ShieldManager implements Listener {
 
     private List<Pattern> getPatterns(Team team) {
         List<Pattern> patterns = new ArrayList<Pattern>();
-
         switch (team) {
             case RED:
-                patterns.add(new Pattern(DyeColor.WHITE,
-                        PatternType.CROSS));
+                patterns.add(new Pattern(DyeColor.WHITE, PatternType.CROSS));
                 patterns.add(new Pattern(DyeColor.BLACK,
                         PatternType.TRIANGLE_TOP));
                 break;
@@ -234,7 +222,6 @@ public class ShieldManager implements Listener {
             default:
                 break;
         }
-
         return patterns;
     }
 
@@ -248,7 +235,6 @@ public class ShieldManager implements Listener {
         int rawSlot = event.getRawSlot();
         int topSize = event.getView().getTopInventory().getSize();
         boolean clickedTop = rawSlot >= 0 && rawSlot < topSize;
-
         boolean cursorShield = isTeamShield(event.getCursor());
         boolean clickedShield = isTeamShield(event.getCurrentItem());
 
@@ -256,28 +242,28 @@ public class ShieldManager implements Listener {
         boolean hotbarShield = hotbarButton >= 0
                 && isTeamShield(player.getInventory().getItem(hotbarButton));
 
+        boolean creativeAction = event.getClick() == ClickType.CREATIVE
+                || event.getClick() == ClickType.MIDDLE;
+        if (creativeAction
+                && (cursorShield || clickedShield || hotbarShield)) {
+            event.setCancelled(true);
+            return;
+        }
+
         if (clickedTop && (cursorShield || clickedShield || hotbarShield)) {
             event.setCancelled(true);
             return;
         }
-
         if (cursorShield && rawSlot == -999) {
             event.setCancelled(true);
             return;
         }
-
         if (clickedShield && event.isShiftClick()) {
             event.setCancelled(true);
             return;
         }
-
         if (clickedShield && (event.getAction() == InventoryAction.DROP_ONE_SLOT
                 || event.getAction() == InventoryAction.DROP_ALL_SLOT)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        if (clickedShield && event.getClick() == ClickType.MIDDLE) {
             event.setCancelled(true);
         }
     }
@@ -285,7 +271,6 @@ public class ShieldManager implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTeamShieldDrag(InventoryDragEvent event) {
         int topSize = event.getView().getTopInventory().getSize();
-
         if (isTeamShield(event.getOldCursor())) {
             for (Integer rawSlot : event.getRawSlots()) {
                 if (rawSlot >= 0 && rawSlot < topSize) {
@@ -342,11 +327,12 @@ public class ShieldManager implements Listener {
     @EventHandler
     public void onTeamShieldRespawn(PlayerRespawnEvent event) {
         final Player player = event.getPlayer();
-
         new BukkitRunnable() {
             @Override
             public void run() {
-                plugin.getTeamManager().updatePlayer(player);
+                if (player.isOnline()) {
+                    plugin.getTeamManager().updatePlayer(player);
+                }
             }
         }.runTaskLater(plugin, 1L);
     }

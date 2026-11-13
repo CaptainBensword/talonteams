@@ -1,4 +1,3 @@
-
 package com.talon.teams;
 
 import org.bukkit.ChatColor;
@@ -17,30 +16,19 @@ public enum Team {
         this.displayName = displayName;
     }
 
-    public ChatColor getColor() {
-        return color;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getColoredName() {
-        return color + displayName;
-    }
+    public ChatColor getColor() { return color; }
+    public String getDisplayName() { return displayName; }
+    public String getColoredName() { return color + displayName; }
 
     public static Team fromString(String name) {
-        if (name == null) {
-            return null;
-        }
-
+        if (name == null) return null;
+        String normalized = name.trim();
         for (Team team : values()) {
-            if (team.name().equalsIgnoreCase(name)
-                    || team.displayName.equalsIgnoreCase(name)) {
+            if (team.name().equalsIgnoreCase(normalized)
+                    || team.displayName.equalsIgnoreCase(normalized)) {
                 return team;
             }
         }
-
         return null;
     }
 }
